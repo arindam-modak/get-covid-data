@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gocarina/gocsv"
+	"github.com/gomodule/redigo/redis"
 	"github.com/labstack/echo"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -191,37 +192,58 @@ func main() {
 
 		fmt.Println(data)
 
-		/*
-		   Connect to my cluster
-		*/
-		dbUri := fmt.Sprintf("mongodb+srv://%s:%s@%s?retryWrites=true&w=majority", os.Getenv("MONGO_USERNAME"), os.Getenv("MONGO_PASSWORD"), os.Getenv("MONGO_HOST"))
-		client, err := mongo.NewClient(options.Client().ApplyURI(dbUri))
+		conn, err := redis.Dial("tcp", os.Getenv("REDIS_URI"), redis.DialPassword(os.Getenv("REDIS_PASSWORD")))
 		if err != nil {
 			log.Fatal(err)
 		}
-		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-		err = client.Connect(ctx)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer client.Disconnect(ctx)
-
-		/*
-		   Get my collection instance
-		*/
-		collection := client.Database(os.Getenv("MONGO_DB_NAME")).Collection(os.Getenv("MONGO_COLLECTION_NAME"))
-
-		cur, currErr := collection.Find(ctx, bson.D{{"state", data.Items[0].Address.State}})
-
-		if cur == nil {
-			panic(currErr)
-		}
-		defer cur.Close(ctx)
+		defer conn.Close()
+		fmt.Println("Connected to Redis")
 
 		var covidDataDB []CovidDataDB
-		if err = cur.All(ctx, &covidDataDB); err != nil {
-			panic(err)
+
+		redisResult, err := redis.String(conn.Do("GET", data.Items[0].Address.State))
+		fmt.Println("From Redis: ", redisResult)
+		if err != nil {
+			fmt.Println("Cache Missed, So Fetching From DB")
+			/*
+				Connect to my cluster
+			*/
+			dbUri := fmt.Sprintf("mongodb+srv://%s:%s@%s?retryWrites=true&w=majority", os.Getenv("MONGO_USERNAME"), os.Getenv("MONGO_PASSWORD"), os.Getenv("MONGO_HOST"))
+			client, err := mongo.NewClient(options.Client().ApplyURI(dbUri))
+			if err != nil {
+				log.Fatal(err)
+			}
+			ctx, _ := context.WithTimeout(context.Background(), 20*time.Second)
+			err = client.Connect(ctx)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer client.Disconnect(ctx)
+
+			/*
+				Get my collection instance
+			*/
+			collection := client.Database(os.Getenv("MONGO_DB_NAME")).Collection(os.Getenv("MONGO_COLLECTION_NAME"))
+
+			cur, currErr := collection.Find(ctx, bson.D{{"state", data.Items[0].Address.State}})
+
+			if cur == nil {
+				panic(currErr)
+			}
+			defer cur.Close(ctx)
+
+			if err = cur.All(ctx, &covidDataDB); err != nil {
+				panic(err)
+			}
+
+			covidDataDBStringified, err := json.Marshal(covidDataDB)
+			// pushing to redis with 30 min expiration time
+			redisResult, err := redis.String(conn.Do("SET", data.Items[0].Address.State, covidDataDBStringified, "EX", "1800"))
+			fmt.Println("Data Pushed To Cache With Response: ", redisResult)
+		} else {
+			json.Unmarshal([]byte(redisResult), &covidDataDB)
 		}
+
 		fmt.Println(covidDataDB)
 
 		return c.JSON(http.StatusOK, covidDataDB)
