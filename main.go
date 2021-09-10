@@ -227,5 +227,5 @@ func main() {
 		return c.JSON(http.StatusOK, covidDataDB)
 	})
 
-	e.Start(":8000")
+	e.Start(":" + os.Getenv("PORT"))
 }
