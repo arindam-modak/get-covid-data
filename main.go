@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -34,6 +35,21 @@ type CovidDataDB struct {
 	RecoveredCases  int    `bson:"recovered_cases,omitempty"`
 	LastUpdatedTime string `bson:"last_updated_time,omitempty"`
 	DataUpdtedAt    string `bson:"data_updated_at,omitempty"`
+}
+
+/*
+	Define GeoLocation struct
+*/
+type GeoLocationOutput struct {
+	Items []GeoLocationItem `json:"items"`
+}
+
+type GeoLocationItem struct {
+	Address GeoLocationItemAddress `json:"address"`
+}
+
+type GeoLocationItemAddress struct {
+	State string `json:"state"`
 }
 
 func main() {
@@ -147,6 +163,68 @@ func main() {
 		fmt.Println(covidDataDB)
 
 		return c.String(http.StatusOK, "Latest Data Fetched")
+	})
+
+	e.GET("/get-data-from-location", func(c echo.Context) error {
+		latitude := c.QueryParam("latitude")
+		longitude := c.QueryParam("longitude")
+
+		locationUri := fmt.Sprintf("%s?at=%s,%s&apikey=%s", os.Getenv("REVERSE_GEOCODE_URL"), latitude, longitude, os.Getenv("REVERSE_GEOCODE_APIKEY"))
+		response, err := http.Get(locationUri)
+		if err != nil {
+			fmt.Print(err.Error())
+			os.Exit(1)
+		}
+
+		responseData, err := ioutil.ReadAll(response.Body)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(string(responseData))
+
+		// decoder := json.NewDecoder(response.Body)
+		// var data GeoLocationOutput
+		// err = decoder.Decode(&data)
+
+		var data = new(GeoLocationOutput)
+		err = json.Unmarshal(responseData, &data)
+
+		fmt.Println(data)
+
+		/*
+		   Connect to my cluster
+		*/
+		dbUri := fmt.Sprintf("mongodb+srv://%s:%s@%s?retryWrites=true&w=majority", os.Getenv("MONGO_USERNAME"), os.Getenv("MONGO_PASSWORD"), os.Getenv("MONGO_HOST"))
+		client, err := mongo.NewClient(options.Client().ApplyURI(dbUri))
+		if err != nil {
+			log.Fatal(err)
+		}
+		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+		err = client.Connect(ctx)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer client.Disconnect(ctx)
+
+		/*
+		   Get my collection instance
+		*/
+		collection := client.Database(os.Getenv("MONGO_DB_NAME")).Collection(os.Getenv("MONGO_COLLECTION_NAME"))
+
+		cur, currErr := collection.Find(ctx, bson.D{{"state", data.Items[0].Address.State}})
+
+		if cur == nil {
+			panic(currErr)
+		}
+		defer cur.Close(ctx)
+
+		var covidDataDB []CovidDataDB
+		if err = cur.All(ctx, &covidDataDB); err != nil {
+			panic(err)
+		}
+		fmt.Println(covidDataDB)
+
+		return c.JSON(http.StatusOK, covidDataDB)
 	})
 
 	e.Start(":8000")
