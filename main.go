@@ -6,11 +6,16 @@ import (
 	"os"
 
 	"github.com/labstack/echo"
+	"github.com/labstack/echo/middleware"
+	// echoSwagger "github.com/swaggo/echo-swagger"
+	// _ "github.com/arindam-modak/get-covid-data/docs"
 )
 
 func main() {
 	fmt.Println("Hello Covid! Please go away now.")
 	e := echo.New()
+	e.Use(middleware.CORS())
+	// e.GET("/swagger/*", echoSwagger.WrapHandler)
 
 	e.GET("/", func(c echo.Context) error {
 		return c.String(http.StatusOK, "Hello from web server")
