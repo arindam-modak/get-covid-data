@@ -1,0 +1,87 @@
+swagger: "2.0"
+info:
+  description: "Get Covid Data"
+  version: "1.0.0"
+  title: "Swagger Get Covid Data"
+host: "get-covid-data.herokuapp.com"
+basePath: "/"
+tags:
+- name: "data"
+  description: "Get Covid Data"
+schemes:
+- "https"
+paths:
+  /fetch-data-and-save:
+    get:
+      tags:
+      - "data"
+      summary: "fetch covid data and save"
+      description: ""
+      operationId: "fetch-data-and-save"
+      consumes:
+      - "application/json"
+      produces:
+      - "application/json"
+      responses:
+        "200":
+          description: "successful operation"
+          schema:
+            type: "string"
+        "400":
+          description: "Invalid status value"
+    
+  /get-data-from-location:
+    get:
+      tags:
+      - "data"
+      summary: "get covid data from location"
+      description: ""
+      operationId: "get-data-from-location"
+      produces:
+      - "application/json"
+      parameters:
+      - name: "latitude"
+        in: "query"
+        description: "latitude of user"
+        required: true
+        type: "string"
+      - name: "longitude"
+        in: "query"
+        description: "longitude of user"
+        required: true
+        type: "string"
+      responses:
+        "200":
+          description: "successful operation"
+          schema:
+            type: "array"
+            items:
+              $ref: "#/definitions/CovidData"
+        "400":
+          description: "Invalid status value"
+definitions:
+  CovidData:
+    type: "object"
+    properties: 
+      State:
+        type: "string"
+      ConfirmedCases:
+        type: "number"
+      RecoveredCases:
+        type: "number"
+      LastUpdatedTime:
+        type: "string"
+        format: "date-time"
+      DataUpdatedAt:
+        type: "string"
+        format: "date-time"
+  ApiResponse:
+    type: "object"
+    properties:
+      code:
+        type: "integer"
+        format: "int32"
+      type:
+        type: "string"
+      message:
+        type: "string"

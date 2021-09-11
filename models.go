@@ -17,7 +17,7 @@ type CovidDataDB struct {
 	ConfirmedCases  int    `bson:"confirmed_cases,omitempty"`
 	RecoveredCases  int    `bson:"recovered_cases,omitempty"`
 	LastUpdatedTime string `bson:"last_updated_time,omitempty"`
-	DataUpdtedAt    string `bson:"data_updated_at,omitempty"`
+	DataUpdatedAt   string `bson:"data_updated_at,omitempty"`
 }
 
 /*
