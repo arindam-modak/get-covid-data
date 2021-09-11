@@ -9,6 +9,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/arindam-modak/get-covid-data/models"
+	"github.com/arindam-modak/get-covid-data/utils"
 	"github.com/gocarina/gocsv"
 	"github.com/gomodule/redigo/redis"
 	"github.com/labstack/echo"
@@ -16,15 +18,15 @@ import (
 )
 
 func fetchDataAndSave(c echo.Context) error {
-	responseData := httpGetRequest(os.Getenv("COVID_DATA_URL"))
+	responseData := utils.HttpGetRequest(os.Getenv("COVID_DATA_URL"))
 	fmt.Println("[fetchDataAndSave] responseData: ", string(responseData))
 
-	createUpdateFile("data.csv", responseData)
+	utils.CreateUpdateFile("data.csv", responseData)
 
-	covidDataFile := readFile("data.csv")
+	covidDataFile := utils.ReadFile("data.csv")
 	defer covidDataFile.Close()
 
-	covidData := []*CovidData{}
+	covidData := []*models.CovidData{}
 
 	if err := gocsv.UnmarshalFile(covidDataFile, &covidData); err != nil { // Load data from file
 		panic(err)
@@ -40,7 +42,7 @@ func fetchDataAndSave(c echo.Context) error {
 	/*
 	   Connect to my cluster
 	*/
-	client := getMongoClient()
+	client := utils.GetMongoClient()
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 	err := client.Connect(ctx)
 	if err != nil {
@@ -70,7 +72,7 @@ func fetchDataAndSave(c echo.Context) error {
 	}
 	defer cur.Close(ctx)
 
-	var covidDataDB []CovidDataDB
+	var covidDataDB []models.CovidDataDB
 	if err = cur.All(ctx, &covidDataDB); err != nil {
 		panic(err)
 	}
@@ -85,19 +87,19 @@ func getDataFromLocation(c echo.Context) error {
 	longitude := c.QueryParam("longitude")
 
 	locationUri := fmt.Sprintf("%s?at=%s,%s&apikey=%s", os.Getenv("REVERSE_GEOCODE_URL"), latitude, longitude, os.Getenv("REVERSE_GEOCODE_APIKEY"))
-	responseData := httpGetRequest(locationUri)
+	responseData := utils.HttpGetRequest(locationUri)
 	fmt.Println("[getDataFromLocation] responseData: ", string(responseData))
 
-	var data = new(GeoLocationOutput)
+	var data = new(models.GeoLocationOutput)
 	_ = json.Unmarshal(responseData, &data)
 
 	fmt.Println("[getDataFromLocation] GeoLocationOutputData: ", data)
 
-	conn := getRedisConn()
+	conn := utils.GetRedisConn()
 	defer conn.Close()
 	fmt.Println("[getDataFromLocation] Connected to Redis")
 
-	var covidDataDB []CovidDataDB
+	var covidDataDB []models.CovidDataDB
 
 	redisResult, err := redis.String(conn.Do("GET", data.Items[0].Address.State))
 	fmt.Println("[getDataFromLocation] From Redis: ", redisResult)
@@ -106,7 +108,7 @@ func getDataFromLocation(c echo.Context) error {
 		/*
 			Connect to my cluster
 		*/
-		client := getMongoClient()
+		client := utils.GetMongoClient()
 		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 		err := client.Connect(ctx)
 		if err != nil {

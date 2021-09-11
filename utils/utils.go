@@ -1,4 +1,4 @@
-package main
+package utils
 
 import (
 	"fmt"
@@ -12,7 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-func httpGetRequest(url string) []byte {
+func HttpGetRequest(url string) []byte {
 	response, err := http.Get(url)
 	if err != nil {
 		log.Fatal(err)
@@ -26,7 +26,7 @@ func httpGetRequest(url string) []byte {
 	return responseData
 }
 
-func createUpdateFile(filename string, data []byte) {
+func CreateUpdateFile(filename string, data []byte) {
 	f, err := os.Create(filename)
 	if err != nil {
 		log.Fatal(err)
@@ -40,7 +40,7 @@ func createUpdateFile(filename string, data []byte) {
 	}
 }
 
-func readFile(filename string) *os.File {
+func ReadFile(filename string) *os.File {
 	covidDataFile, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, os.ModePerm)
 	if err != nil {
 		panic(err)
@@ -49,7 +49,7 @@ func readFile(filename string) *os.File {
 	return covidDataFile
 }
 
-func getMongoClient() *mongo.Client {
+func GetMongoClient() *mongo.Client {
 	/*
 	   Connect to my cluster
 	*/
@@ -62,7 +62,7 @@ func getMongoClient() *mongo.Client {
 	return client
 }
 
-func getRedisConn() redis.Conn {
+func GetRedisConn() redis.Conn {
 	conn, err := redis.Dial("tcp", os.Getenv("REDIS_URI"), redis.DialPassword(os.Getenv("REDIS_PASSWORD")))
 	if err != nil {
 		log.Fatal(err)
